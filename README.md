@@ -227,4 +227,12 @@ The video demonstrates:
 * Natural language queries
 * Blast radius analysis
 
+Separation of LLM and Execution (Design Decision):
+
+* The LLM in this system is used only to understand the user’s intent, not to access data or execute graph queries.
+Once the intent is extracted, all logic such as traversing dependencies, finding owners, or calculating blast radius is handled by deterministic Python code.
+
+* This separation helps prevent hallucination because the LLM never generates answers on its own.
+It also makes the system easier to debug, since graph behavior is predictable and not dependent on model output.
+Overall, this keeps the system reliable while still benefiting from natural language input.
 ---
