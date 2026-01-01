@@ -1,90 +1,67 @@
 import yaml
+from connectors.base import BaseConnector
+from connectors.registry import register
 from graph.models import make_node, make_edge
 
 
-def parse_docker_compose(path, graph):
-    with open(path) as f:
-        compose = yaml.safe_load(f)
+@register
+class DockerComposeConnector(BaseConnector):
 
-    services = compose.get("services", {})
+    def name(self):
+        return "docker-compose"
 
-    for service_name, config in services.items():
-        labels = config.get("labels", {})
-        env_vars = config.get("environment", [])
-        depends_on = config.get("depends_on", [])
+    def parse(self, graph):
+        with open("data/docker_compose.yml") as f:
+            compose = yaml.safe_load(f)
 
-        # SERVICE NODE
-        service_node = make_node(
-            "service",
-            service_name,
-            {
-                "team": labels.get("team"),
-                "oncall": labels.get("oncall"),
-                "pci_compliant": labels.get("pci_compliant")
-            }
-        )
-        graph.upsert_node(service_node)
+        services = compose.get("services", {})
 
-        #  DEPENDS_ON (SERVICE → SERVICE)
-        for dep in depends_on:
-            edge = make_edge(
-                "calls",
-                f"service:{service_name}",
-                f"service:{dep}"
+        for service_name, config in services.items():
+            labels = config.get("labels", {})
+            env_vars = config.get("environment", [])
+            depends_on = config.get("depends_on", [])
+
+            service_node = make_node(
+                "service",
+                service_name,
+                {
+                    "team": labels.get("team"),
+                    "oncall": labels.get("oncall"),
+                    "pci_compliant": labels.get("pci_compliant")
+                }
             )
-            graph.upsert_edge(edge)
+            graph.upsert_node(service_node)
 
-        # ENV BASED DEPENDENCIES 
-        for env in env_vars:
-            if "DATABASE_URL" in env:
-                db_name = extract_db_name(env)
-                db_node = make_node("database", db_name)
-                graph.upsert_node(db_node)
-
+            # depends_on → calls
+            for dep in depends_on:
                 graph.upsert_edge(
                     make_edge(
-                        "reads_from",
+                        "calls",
                         f"service:{service_name}",
-                        f"database:{db_name}"
+                        f"service:{dep}"
                     )
                 )
 
-            if "REDIS_URL" in env:
-                cache_name = extract_cache_name(env)
-                cache_node = make_node("cache", cache_name)
-                graph.upsert_node(cache_node)
-
-                graph.upsert_edge(
-                    make_edge(
-                        "uses",
-                        f"service:{service_name}",
-                        f"cache:{cache_name}"
+            # env-based deps
+            for env in env_vars:
+                if "DATABASE_URL" in env:
+                    db = env.split("@")[-1].split(":")[0]
+                    graph.upsert_node(make_node("database", db))
+                    graph.upsert_edge(
+                        make_edge(
+                            "reads_from",
+                            f"service:{service_name}",
+                            f"database:{db}"
+                        )
                     )
-                )
 
-        #  DATABASE / CACHE SERVICES 
-        if labels.get("type") == "database":
-            db_node = make_node(
-                "database",
-                service_name,
-                {"team": labels.get("team")}
-            )
-            graph.upsert_node(db_node)
-
-        if labels.get("type") == "cache":
-            cache_node = make_node(
-                "cache",
-                service_name,
-                {"team": labels.get("team")}
-            )
-            graph.upsert_node(cache_node)
-
-
-def extract_db_name(env):
-    # postgresql://...@payments-db:5432/payments
-    return env.split("@")[-1].split(":")[0]
-
-
-def extract_cache_name(env):
-    # redis://redis-main:6379
-    return env.split("//")[-1].split(":")[0]
+                if "REDIS_URL" in env:
+                    cache = env.split("//")[-1].split(":")[0]
+                    graph.upsert_node(make_node("cache", cache))
+                    graph.upsert_edge(
+                        make_edge(
+                            "uses",
+                            f"service:{service_name}",
+                            f"cache:{cache}"
+                        )
+                    )
