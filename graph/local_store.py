@@ -60,4 +60,10 @@ class LocalGraphStore(GraphStorage):
 
     def get_graph(self):
         return self.graph
+    
+    def add_node(self, node):
+        self.nodes[node["id"]] = node   
+
+    def add_edge(self, edge):
+        self.edges.append(edge)
 

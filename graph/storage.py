@@ -35,3 +35,9 @@ class GraphStorage(ABC):
         if node_id not in self.graph:
             return []
         return self.graph.in_edges(node_id, data=True)
+    
+    def add_node(self, node):
+        pass
+
+    def add_edge(self, edge):
+        pass
