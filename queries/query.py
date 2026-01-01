@@ -2,7 +2,6 @@ import networkx as nx
 
 class QueryEngine:
     def __init__(self, graph_store):
-        # graph_store = LocalGraphStore
         self.store = graph_store
         self.graph = graph_store.get_graph()
 
